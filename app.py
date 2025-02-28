@@ -1,14 +1,13 @@
 import re
 import os
 import subprocess
-import uuid
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
 # Set the UPLOAD_FOLDER and OUTPUT_FOLDER in app.config
-app.config['UPLOAD_FOLDER'] = os.path.join('docs', 'uploads')
-app.config['OUTPUT_FOLDER'] = os.path.join('docs', 'output')
+app.config['UPLOAD_FOLDER'] = os.path.join('uploads')
+app.config['OUTPUT_FOLDER'] = os.path.join('output')
 
 # Ensure upload and output directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -67,20 +66,19 @@ def upload_file():
     if not allowed_file(file.filename):
         return jsonify({"error": "Invalid file type"}), 400
     
-    # Generate a unique filename for the uploaded file
-    filename = str(uuid.uuid4()) + '.stl'
+    # Use the original filename for the uploaded file
+    filename = file.filename
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
     # Save the file
     file.save(input_path)
 
     # Generate a unique G-code output filename
-    output_filename = str(uuid.uuid4()) + '.gcode'
+    output_filename = filename.rsplit('.', 1)[0] + '.gcode'  # Change the extension to .gcode
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
-    # Run PrusaSlicer using subprocess with the correct path for Windows
+    # Run PrusaSlicer using subprocess
     try:
-        # Command to run PrusaSlicer for Windows (use correct path)
         subprocess.run([
             "flatpak", "run", "com.prusa3d.PrusaSlicer",
             "--load", "config.ini",  # Configuration file path (if necessary)
@@ -90,13 +88,13 @@ def upload_file():
         ], check=True)
 
         # Return the G-code file path as a response
-        gcode_data = extract_gcode_data(output_path)
-        return jsonify(gcode_data), 200
-    
+        return jsonify({"message": "File processed successfully", "gcode_path": output_path}), 200
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"PrusaSlicer failed: {str(e)}"}), 500
 
         # Extract the data from the generated G-code file
+        gcode_data = extract_gcode_data(output_path)
+        return jsonify(gcode_data), 200
         
 
 if __name__ == '__main__':
